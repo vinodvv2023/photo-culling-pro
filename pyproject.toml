@@ -1,0 +1,21 @@
+[project]
+name = "photo-culling-pro"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "concurrent-futures",
+    "flask==2.3.3",
+    "imagehash==4.3.1",
+    "numpy==1.24.3",
+    "opencv-python==4.8.1.78",
+    "pathlib2",
+    "pillow==10.0.1",
+    "pyiqa==0.1.7",
+    "scikit-image==0.21.0",
+    "sqlite3",
+    "torch==2.0.1",
+    "torchvision==0.15.2",
+    "werkzeug==2.3.7",
+]
