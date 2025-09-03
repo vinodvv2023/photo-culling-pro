@@ -32,8 +32,8 @@ class PhotoCullingApp {
         });
         document.getElementById('load-sample').addEventListener('click', () => this.loadSampleImages());
 
-        // Drag and drop for upload
-        this.setupUploadDragAndDrop();
+        // Drag and drop
+        this.setupDragAndDrop();
 
         // Filters and sorting
         document.getElementById('sort-select').addEventListener('change', (e) => {
@@ -107,9 +107,21 @@ class PhotoCullingApp {
         // Compare View Controls
         document.getElementById('clear-compare-btn').addEventListener('click', () => this.clearCompareView());
         document.getElementById('film-strip-search').addEventListener('input', (e) => this.filterFilmStrip(e.target.value));
+
+        const compareLeft = document.getElementById('compare-left');
+        const compareRight = document.getElementById('compare-right');
+
+        [compareLeft, compareRight].forEach(panel => {
+            panel.addEventListener('mouseenter', () => {
+                document.querySelectorAll('.compare-image-details').forEach(el => el.classList.add('visible'));
+            });
+            panel.addEventListener('mouseleave', () => {
+                document.querySelectorAll('.compare-image-details').forEach(el => el.classList.remove('visible'));
+            });
+        });
     }
 
-    setupUploadDragAndDrop() {
+    setupDragAndDrop() {
         const uploadArea = document.getElementById('upload-area');
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -209,7 +221,6 @@ class PhotoCullingApp {
             {
                 id: 1,
                 filename: 'sample_portrait_1.jpg',
-                thumbnail_path: 'sample_portrait_1.jpg',
                 focus_score: 85,
                 exposure_score: 92,
                 quality_score: 88,
@@ -227,7 +238,6 @@ class PhotoCullingApp {
             {
                 id: 2,
                 filename: 'sample_landscape_1.jpg',
-                thumbnail_path: 'sample_landscape_1.jpg',
                 focus_score: 45,
                 exposure_score: 78,
                 quality_score: 62,
@@ -245,7 +255,6 @@ class PhotoCullingApp {
             {
                 id: 3,
                 filename: 'sample_portrait_2.jpg',
-                thumbnail_path: 'sample_portrait_2.jpg',
                 focus_score: 92,
                 exposure_score: 88,
                 quality_score: 90,
@@ -384,6 +393,7 @@ class PhotoCullingApp {
         canvas.height = 200;
         const ctx = canvas.getContext('2d');
 
+        // Choose color based on quality
         const quality = image.quality_score || 0;
         let color;
         if (quality > 80) color = '#198754'; // green
@@ -393,6 +403,7 @@ class PhotoCullingApp {
         ctx.fillStyle = color;
         ctx.fillRect(0, 0, 300, 200);
 
+        // Add text
         ctx.fillStyle = 'white';
         ctx.font = '16px Arial';
         ctx.textAlign = 'center';
@@ -423,20 +434,25 @@ class PhotoCullingApp {
         const modalElement = document.getElementById('imageModal');
         const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
 
+        // Populate modal
         document.getElementById('modal-filename').textContent = image.filename;
         document.getElementById('modal-image').src = image.filename ? `/images/${image.filename}` : this.generatePlaceholderImage(image);
 
         this.updateModalUI(image);
+
+        // Populate analysis results
         this.populateAnalysisResults(image);
 
         modal.show();
     }
 
     updateModalUI(image) {
+        // Update rating buttons
         document.querySelectorAll('.rating-btn').forEach(btn => {
             btn.classList.toggle('active', parseInt(btn.getAttribute('data-rating')) === (image.rating || 0));
         });
 
+        // Update label buttons
         document.querySelectorAll('.label-btn').forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-label') === (image.label || 'none'));
         });
@@ -478,11 +494,14 @@ class PhotoCullingApp {
         try {
             const response = await fetch(`/api/images/${imageId}/rating`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({ rating, label: this.images.find(img => img.id === imageId).label })
             });
 
             if (response.ok) {
+                // Update local data
                 const image = this.images.find(img => img.id === imageId);
                 if (image) {
                     image.rating = rating;
@@ -501,11 +520,14 @@ class PhotoCullingApp {
         try {
             const response = await fetch(`/api/images/${imageId}/rating`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({ rating: this.images.find(img => img.id === imageId).rating, label })
             });
 
             if (response.ok) {
+                // Update local data
                 const image = this.images.find(img => img.id === imageId);
                 if (image) {
                     image.label = label;
@@ -533,8 +555,12 @@ class PhotoCullingApp {
     batchAction(action) {
         this.filteredImages.forEach(image => {
             switch (action) {
-                case 'select': this.updateImageLabel(image.id, 'selected'); break;
-                case 'reject': this.updateImageLabel(image.id, 'rejected'); break;
+                case 'select':
+                    this.updateImageLabel(image.id, 'selected');
+                    break;
+                case 'reject':
+                    this.updateImageLabel(image.id, 'rejected');
+                    break;
                 case 'clear':
                     this.updateImageRating(image.id, 0);
                     this.updateImageLabel(image.id, 'none');
@@ -545,6 +571,7 @@ class PhotoCullingApp {
 
     setView(view) {
         this.currentView = view;
+
         document.querySelectorAll('[data-view]').forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-view') === view);
         });
@@ -691,7 +718,9 @@ class PhotoCullingApp {
         try {
             const response = await fetch('/api/export', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({
                     type: exportType,
                     selected_ids: selectedImages.map(img => img.id)
@@ -734,22 +763,38 @@ class PhotoCullingApp {
     }
 
     handleKeyboard(event) {
+        // Only handle keyboard shortcuts when not in input fields
         if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
             return;
         }
 
         switch (event.key) {
-            case '1': case '2': case '3': case '4': case '5':
-                if (this.currentImageId) this.updateImageRating(this.currentImageId, parseInt(event.key));
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+                if (this.currentImageId) {
+                    this.updateImageRating(this.currentImageId, parseInt(event.key));
+                }
                 break;
-            case 'g': case 'G':
-                if (this.currentImageId) this.updateImageLabel(this.currentImageId, 'selected');
+            case 'g':
+            case 'G':
+                if (this.currentImageId) {
+                    this.updateImageLabel(this.currentImageId, 'selected');
+                }
                 break;
-            case 'r': case 'R':
-                if (this.currentImageId) this.updateImageLabel(this.currentImageId, 'rejected');
+            case 'r':
+            case 'R':
+                if (this.currentImageId) {
+                    this.updateImageLabel(this.currentImageId, 'rejected');
+                }
                 break;
-            case 'y': case 'Y':
-                if (this.currentImageId) this.updateImageLabel(this.currentImageId, 'review');
+            case 'y':
+            case 'Y':
+                if (this.currentImageId) {
+                    this.updateImageLabel(this.currentImageId, 'review');
+                }
                 break;
             case 'Escape':
                 const modal = bootstrap.Modal.getInstance(document.getElementById('imageModal'));
@@ -759,6 +804,7 @@ class PhotoCullingApp {
     }
 
     showNotification(message, type = 'info') {
+        // Create a simple toast notification
         const toast = document.createElement('div');
         toast.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
         toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
