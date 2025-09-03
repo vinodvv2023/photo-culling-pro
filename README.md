@@ -244,7 +244,7 @@ For technical issues:
 
 ## License
 
-This project is provided as-is for educational and professional use. Modify and distribute according to your needs.
+This project is provided as-is for educational and professional use. Modify and distribute according to your needs. Released under Apache License 2.0
 
 ## Contributing
 
@@ -258,3 +258,4 @@ Contributions welcome! Areas for improvement:
 ---
 
 **PhotoCull Pro** - Professional photo culling made efficient and intelligent.
+
