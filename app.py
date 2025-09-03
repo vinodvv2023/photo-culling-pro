@@ -74,7 +74,7 @@ class ImageAnalyzer:
             gray = img
         laplacian = cv2.Laplacian(gray, cv2.CV_64F)
         return laplacian.var()
-
+    
     @staticmethod
     def focus_measure_tenengrad(img):
         if len(img.shape) > 2:
@@ -85,23 +85,23 @@ class ImageAnalyzer:
         sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
         magnitude = np.sqrt(sobelx**2 + sobely**2)
         return np.mean(magnitude)
-
+    
     @staticmethod
     def exposure_analysis(img):
         if len(img.shape) > 2:
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         else:
             gray = img
-
+        
         hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
         total_pixels = np.sum(hist)
-
+        
         overexposed = np.sum(hist[-10:]) / total_pixels
         underexposed = np.sum(hist[:10]) / total_pixels
-
+        
         exposure_score = 100 - (overexposed * 100 + underexposed * 100)
         exposure_score = max(0, min(100, exposure_score))
-
+        
         return {
             'exposure_score': exposure_score,
             'overexposed_percent': overexposed * 100,
@@ -109,27 +109,27 @@ class ImageAnalyzer:
             'is_overexposed': bool(overexposed > 0.02),
             'is_underexposed': bool(underexposed > 0.02)
         }
-
+    
     @staticmethod
     def analyze_faces(img):
         if len(img.shape) > 2:
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         else:
             gray = img
-
+            
         faces = face_cascade.detectMultiScale(gray, 1.3, 5)
         face_analysis = {
             'face_count': len(faces),
             'faces_detected': len(faces) > 0,
             'face_details': []
         }
-
+        
         for (x, y, w, h) in faces:
             face_roi = gray[y:y+h, x:x+w]
             eyes = eye_cascade.detectMultiScale(face_roi, 1.1, 5)
-
+            
             eyes_open = len(eyes) >= 2
-
+            
             face_detail = {
                 'position': {'x': int(x), 'y': int(y), 'width': int(w), 'height': int(h)},
                 'eyes_detected': len(eyes),
@@ -137,9 +137,9 @@ class ImageAnalyzer:
                 'face_size_ratio': (w * h) / (img.shape[0] * img.shape[1])
             }
             face_analysis['face_details'].append(face_detail)
-
+        
         return face_analysis
-
+    
     @staticmethod
     def comprehensive_analysis(image_path):
         try:
@@ -147,19 +147,19 @@ class ImageAnalyzer:
             if img is None:
                 app.logger.error(f"Failed to read image: {image_path}")
                 return None
-
+            
             focus_score = ImageAnalyzer.focus_measure_laplacian(img)
             tenengrad_score = ImageAnalyzer.focus_measure_tenengrad(img)
             exposure = ImageAnalyzer.exposure_analysis(img)
             face_analysis = ImageAnalyzer.analyze_faces(img)
-
+            
             # Generate perceptual hash
             pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
             phash = str(imagehash.dhash(pil_img))
-
+            
             # Calculate overall quality score
             quality_score = min(100, focus_score / 2000 * 100)
-
+            
             return {
                 'focus_score': round(focus_score / 20, 2),  # Normalize to 0-100
                 'tenengrad_score': round(tenengrad_score, 2),
@@ -170,7 +170,7 @@ class ImageAnalyzer:
                 'image_dimensions': {'width': img.shape[1], 'height': img.shape[0]},
                 'file_size': os.path.getsize(image_path)
             }
-
+            
         except Exception as e:
             app.logger.error(f"Error analyzing {image_path}: {str(e)}")
             return None
@@ -179,11 +179,11 @@ class DatabaseManager:
     def __init__(self, db_path='culling_session.db'):
         self.db_path = db_path
         self.init_database()
-
+    
     def init_database(self):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-
+        
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS images (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -203,14 +203,14 @@ class DatabaseManager:
                 processed BOOLEAN DEFAULT FALSE
             )
         ''')
-
+        
         conn.commit()
         conn.close()
-
+    
     def add_image(self, image_data):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-
+        
         cursor.execute('''
             INSERT INTO images (filename, filepath, thumbnail_path, rating, label,
                               focus_score, exposure_score, quality_score, face_count,
@@ -230,34 +230,34 @@ class DatabaseManager:
             image_data.get('perceptual_hash'),
             json.dumps(image_data.get('analysis_data', {}), cls=NumpyEncoder)
         ))
-
+        
         image_id = cursor.lastrowid
         conn.commit()
         conn.close()
         return image_id
-
+    
     def get_all_images(self):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-
+        
         cursor.execute('SELECT * FROM images ORDER BY upload_timestamp DESC')
         images = [dict(row) for row in cursor.fetchall()]
-
+        
         conn.close()
         return images
-
+    
     def update_image_rating(self, image_id, rating, label=None):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-
+        
         if label:
             cursor.execute('UPDATE images SET rating = ?, label = ? WHERE id = ?',
                           (rating, label, image_id))
         else:
             cursor.execute('UPDATE images SET rating = ? WHERE id = ?',
                           (rating, image_id))
-
+        
         conn.commit()
         conn.close()
 
@@ -290,20 +290,20 @@ def process_image(filepath, filename):
     try:
         # Generate thumbnail
         thumbnail_filename = f"thumb_{filename}"
-        thumbnail_path = os.path.join(app.config['THUMBNAILS_FOLDER'], thumbnail_filename)
-        if not generate_thumbnail(filepath, thumbnail_path):
+        thumbnail_full_path = os.path.join(app.config['THUMBNAILS_FOLDER'], thumbnail_filename)
+        if not generate_thumbnail(filepath, thumbnail_full_path):
             return {'error': 'Failed to generate thumbnail.'}
-
+        
         # Perform analysis
         analysis = ImageAnalyzer.comprehensive_analysis(filepath)
         if not analysis:
             return {'error': 'Failed to analyze image.'}
-
+        
         # Prepare image data
         image_data = {
             'filename': filename,
             'filepath': filepath,
-            'thumbnail_path': thumbnail_path,
+            'thumbnail_path': thumbnail_filename,
             'focus_score': analysis['focus_score'],
             'exposure_score': analysis['exposure_analysis']['exposure_score'],
             'quality_score': analysis['quality_score'],
@@ -312,13 +312,13 @@ def process_image(filepath, filename):
             'perceptual_hash': analysis['perceptual_hash'],
             'analysis_data': analysis
         }
-
+        
         # Add to database
         image_id = db.add_image(image_data)
         image_data['id'] = image_id
-
+        
         return image_data
-
+        
     except Exception as e:
         app.logger.error(f"Error processing {filepath}: {str(e)}")
         return {'error': 'A server error occurred during processing.'}
@@ -331,23 +331,23 @@ def index():
 def upload_files():
     if 'files' not in request.files:
         return jsonify({'error': 'No files provided'}), 400
-
+    
     files = request.files.getlist('files')
     results = []
     errors = []
-
+    
     for file in files:
         if file.filename == '':
             continue
-
+        
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             unique_filename = f"{timestamp}_{filename}"
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-
+            
             file.save(filepath)
-
+            
             result = process_image(filepath, unique_filename)
             if result and 'error' not in result:
                 results.append(result)
@@ -367,10 +367,10 @@ def upload_files():
 @app.route('/api/images')
 def get_images():
     images = db.get_all_images()
-
+    
     for img in images:
         img['analysis_data'] = json.loads(img.get('analysis_data', '{}'))
-
+    
     return jsonify(images)
 
 @app.route('/api/images/<int:image_id>/rating', methods=['POST'])
@@ -378,9 +378,9 @@ def update_rating(image_id):
     data = request.get_json()
     rating = data.get('rating', 0)
     label = data.get('label', 'none')
-
+    
     db.update_image_rating(image_id, rating, label)
-
+    
     return jsonify({'success': True})
 
 @app.route('/thumbnails/<filename>')
