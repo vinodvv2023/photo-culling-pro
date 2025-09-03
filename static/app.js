@@ -4,7 +4,7 @@ class PhotoCullingApp {
         this.images = [];
         this.filteredImages = [];
         this.currentImageId = null;
-        this.compareImages = [null, null];
+        this.compareImages = [];
         this.currentView = 'grid';
         this.thumbnailSize = 250;
         this.processing = false;
@@ -101,22 +101,6 @@ class PhotoCullingApp {
             btn.addEventListener('click', (e) => {
                 const label = e.target.getAttribute('data-label');
                 this.updateImageLabel(this.currentImageId, label);
-            });
-        });
-
-        // Compare View Controls
-        document.getElementById('clear-compare-btn').addEventListener('click', () => this.clearCompareView());
-        document.getElementById('film-strip-search').addEventListener('input', (e) => this.filterFilmStrip(e.target.value));
-
-        const compareLeft = document.getElementById('compare-left');
-        const compareRight = document.getElementById('compare-right');
-
-        [compareLeft, compareRight].forEach(panel => {
-            panel.addEventListener('mouseenter', () => {
-                document.querySelectorAll('.compare-image-details').forEach(el => el.classList.add('visible'));
-            });
-            panel.addEventListener('mouseleave', () => {
-                document.querySelectorAll('.compare-image-details').forEach(el => el.classList.remove('visible'));
             });
         });
     }
@@ -576,20 +560,12 @@ class PhotoCullingApp {
             btn.classList.toggle('active', btn.getAttribute('data-view') === view);
         });
 
-        const gridView = document.getElementById('image-grid');
-        const welcomeMessage = document.getElementById('welcome-message');
-        const compareView = document.getElementById('compare-container');
-
         if (view === 'grid') {
-            gridView.style.display = 'grid';
-            welcomeMessage.style.display = this.images.length === 0 ? 'block' : 'none';
-            compareView.style.display = 'none';
-        } else { // 'compare'
-            gridView.style.display = 'none';
-            welcomeMessage.style.display = 'none';
-            compareView.style.display = 'block';
-            this.clearCompareView();
-            this.renderFilmStrip();
+            document.getElementById('image-grid').style.display = 'grid';
+            document.getElementById('compare-container').style.display = 'none';
+        } else {
+            document.getElementById('image-grid').style.display = 'none';
+            document.getElementById('compare-container').style.display = 'block';
         }
     }
 
@@ -603,93 +579,6 @@ class PhotoCullingApp {
         grid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${minWidth}px, 1fr))`;
     }
 
-    renderCompareImage(imageId, panelId) {
-        const image = this.images.find(img => img.id === imageId);
-        if (!image) return;
-
-        const panel = document.getElementById(panelId);
-        if (!panel) return;
-
-        const imageSrc = image.filename ? `/images/${image.filename}` : this.generatePlaceholderImage(image);
-
-        panel.innerHTML = `
-            <div class="compare-image-container">
-                <img src="${imageSrc}" alt="${image.filename}" class="img-fluid">
-                <div class="compare-image-details p-2">
-                    <h6>${image.filename}</h6>
-                    <div class="analysis-metric">
-                        <span>Focus:</span>
-                        <span class="metric-value ${this.getQualityClass(image.focus_score)}">${Math.round(image.focus_score || 0)}</span>
-                    </div>
-                    <div class="analysis-metric">
-                        <span>Exposure:</span>
-                        <span class="metric-value ${this.getQualityClass(image.exposure_score)}">${Math.round(image.exposure_score || 0)}</span>
-                    </div>
-                    <div class="analysis-metric">
-                        <span>Quality:</span>
-                        <span class="metric-value ${this.getQualityClass(image.quality_score)}">${Math.round(image.quality_score || 0)}</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    renderFilmStrip(images = this.images) {
-        const filmStripGrid = document.getElementById('film-strip-grid');
-        filmStripGrid.innerHTML = '';
-
-        images.forEach(image => {
-            const img = document.createElement('img');
-            img.src = image.thumbnail_path ? `/thumbnails/${image.thumbnail_path}` : this.generatePlaceholderImage(image);
-            img.alt = image.filename;
-            img.className = 'film-strip-image';
-            img.setAttribute('data-image-id', image.id);
-
-            if (this.compareImages.includes(image.id)) {
-                img.classList.add('selected');
-            }
-
-            img.addEventListener('click', () => this.handleFilmStripClick(image.id));
-            filmStripGrid.appendChild(img);
-        });
-    }
-
-    handleFilmStripClick(imageId) {
-        // Avoid selecting the same image twice
-        if (this.compareImages.includes(imageId)) return;
-
-        const firstEmptySlot = this.compareImages.indexOf(null);
-
-        if (firstEmptySlot !== -1) {
-            this.compareImages[firstEmptySlot] = imageId;
-            const panelId = firstEmptySlot === 0 ? 'compare-left' : 'compare-right';
-            this.renderCompareImage(imageId, panelId);
-            this.renderFilmStrip(); // Re-render to show selection
-        }
-        // If no empty slots, do nothing as per user requirement.
-    }
-
-    clearCompareView() {
-        this.compareImages = [null, null];
-
-        const leftPanel = document.getElementById('compare-left');
-        const rightPanel = document.getElementById('compare-right');
-
-        leftPanel.innerHTML = `<div class="compare-placeholder"><p class="text-muted">Select first image to compare</p></div>`;
-        rightPanel.innerHTML = `<div class="compare-placeholder"><p class="text-muted">Select second image to compare</p></div>`;
-
-        document.getElementById('film-strip-search').value = '';
-        this.renderFilmStrip();
-    }
-
-    filterFilmStrip(searchTerm) {
-        const lowerCaseSearchTerm = searchTerm.toLowerCase();
-        const filtered = this.images.filter(image =>
-            image.filename.toLowerCase().includes(lowerCaseSearchTerm)
-        );
-        this.renderFilmStrip(filtered);
-    }
-
     updateStats() {
         const totalCount = this.images.length;
         const selectedCount = this.images.filter(img => img.label === 'selected').length;
@@ -701,19 +590,23 @@ class PhotoCullingApp {
     }
 
     showExportModal() {
-        const selectedImages = this.images.filter(img => img.label === 'selected');
-        if (selectedImages.length === 0) {
-            this.showNotification('No images selected for export', 'warning');
+        if (this.filteredImages.length === 0) {
+            this.showNotification('No images visible to export', 'warning');
             return;
         }
+
+        const modalTitle = document.getElementById('export-modal-title');
+        const modalBody = document.getElementById('export-modal-body');
+
+        modalTitle.textContent = `Export ${this.filteredImages.length} Visible Images`;
+        modalBody.textContent = `This will generate a CSV file with the original filenames of the ${this.filteredImages.length} currently visible images.`;
 
         const modal = new bootstrap.Modal(document.getElementById('exportModal'));
         modal.show();
     }
 
     async exportImages() {
-        const selectedImages = this.images.filter(img => img.label === 'selected');
-        const exportType = document.querySelector('input[name="exportType"]:checked').value;
+        const visibleImageIds = this.filteredImages.map(img => img.id);
 
         try {
             const response = await fetch('/api/export', {
@@ -722,19 +615,37 @@ class PhotoCullingApp {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    type: exportType,
-                    selected_ids: selectedImages.map(img => img.id)
+                    image_ids: visibleImageIds
                 })
             });
 
-            const result = await response.json();
-
-            if (result.success) {
-                this.showNotification(`Successfully exported ${result.exported_files} files`, 'success');
-                bootstrap.Modal.getInstance(document.getElementById('exportModal')).hide();
-            } else {
-                this.showNotification('Export failed', 'error');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = 'export.csv';
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+                if (filenameMatch && filenameMatch.length > 1) {
+                    filename = filenameMatch[1];
+                }
+            }
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+
+            this.showNotification('Successfully exported CSV', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('exportModal')).hide();
+
         } catch (error) {
             console.error('Export error:', error);
             this.showNotification('Export failed', 'error');
