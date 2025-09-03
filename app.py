@@ -19,6 +19,9 @@ import zipfile
 import shutil
 import json
 import logging
+import io
+import csv
+from flask import Response
 
 app = Flask(__name__)
 
@@ -188,6 +191,7 @@ class DatabaseManager:
             CREATE TABLE IF NOT EXISTS images (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 filename TEXT NOT NULL,
+                original_filename TEXT,
                 filepath TEXT NOT NULL,
                 thumbnail_path TEXT,
                 upload_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -212,12 +216,13 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         cursor.execute('''
-            INSERT INTO images (filename, filepath, thumbnail_path, rating, label,
+            INSERT INTO images (filename, original_filename, filepath, thumbnail_path, rating, label,
                               focus_score, exposure_score, quality_score, face_count,
                               eyes_open, perceptual_hash, analysis_data)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             image_data['filename'],
+            image_data.get('original_filename'),
             image_data['filepath'],
             image_data.get('thumbnail_path'),
             image_data.get('rating', 0),
@@ -286,7 +291,7 @@ def allowed_file(filename):
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'tiff', 'tif', 'bmp', 'webp'}
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def process_image(filepath, filename):
+def process_image(filepath, filename, original_filename):
     try:
         # Generate thumbnail
         thumbnail_filename = f"thumb_{filename}"
@@ -302,6 +307,7 @@ def process_image(filepath, filename):
         # Prepare image data
         image_data = {
             'filename': filename,
+            'original_filename': original_filename,
             'filepath': filepath,
             'thumbnail_path': thumbnail_filename,
             'focus_score': analysis['focus_score'],
@@ -348,7 +354,7 @@ def upload_files():
             
             file.save(filepath)
             
-            result = process_image(filepath, unique_filename)
+            result = process_image(filepath, unique_filename, filename)
             if result and 'error' not in result:
                 results.append(result)
             else:
@@ -390,6 +396,38 @@ def serve_thumbnail(filename):
 @app.route('/images/<filename>')
 def serve_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/api/export', methods=['POST'])
+def export_csv():
+    data = request.get_json()
+    image_ids = data.get('image_ids', [])
+
+    if not image_ids:
+        return jsonify({'error': 'No image IDs provided'}), 400
+
+    conn = sqlite3.connect(db.db_path)
+    cursor = conn.cursor()
+
+    query = f"SELECT original_filename FROM images WHERE id IN ({','.join('?' for _ in image_ids)})"
+    cursor.execute(query, image_ids)
+
+    filenames = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    # Generate CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['original_filename'])
+    for filename in filenames:
+        writer.writerow([filename])
+
+    output.seek(0)
+
+    return Response(
+        output,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=export.csv"}
+    )
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
