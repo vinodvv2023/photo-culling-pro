@@ -290,8 +290,9 @@ def process_image(filepath, filename):
     try:
         # Generate thumbnail
         thumbnail_filename = f"thumb_{filename}"
-        thumbnail_full_path = os.path.join(app.config['THUMBNAILS_FOLDER'], thumbnail_filename)
-        if not generate_thumbnail(filepath, thumbnail_full_path):
+        thumbnail_path = os.path.join(app.config['THUMBNAILS_FOLDER'], thumbnail_filename)
+        if not generate_thumbnail(filepath, thumbnail_path):
+
             return {'error': 'Failed to generate thumbnail.'}
 
         # Perform analysis
@@ -303,7 +304,7 @@ def process_image(filepath, filename):
         image_data = {
             'filename': filename,
             'filepath': filepath,
-            'thumbnail_path': thumbnail_filename,
+            'thumbnail_path': thumbnail_path,
             'focus_score': analysis['focus_score'],
             'exposure_score': analysis['exposure_analysis']['exposure_score'],
             'quality_score': analysis['quality_score'],
@@ -378,7 +379,6 @@ def update_rating(image_id):
     data = request.get_json()
     rating = data.get('rating', 0)
     label = data.get('label', 'none')
-    app.logger.info(f"Updating image {image_id} with rating: {rating}, label: {label}")
     db.update_image_rating(image_id, rating, label)
 
     return jsonify({'success': True})
