@@ -12,8 +12,8 @@ class PhotoCullingApp {
         this.filters = {
             rating: 'all',
             label: 'all',
-            focusThreshold: 60,
-            exposureThreshold: 70
+            focusThreshold: 0,
+            exposureThreshold: 0
         };
         
         this.sortBy = 'filename';
@@ -149,18 +149,35 @@ class PhotoCullingApp {
             formData.append('files', file);
         });
         
+        console.log('Starting upload for', files.length, 'files.');
+
         try {
             const response = await fetch('/api/upload', {
                 method: 'POST',
                 body: formData
             });
             
+            console.log('Received response from /api/upload');
             const result = await response.json();
+            console.log('Parsed JSON response:', result);
             
             if (result.success) {
-                await this.loadImages();
-                this.showNotification(`Successfully processed ${result.processed_count} images`, 'success');
+                if (result.images && result.images.length > 0) {
+                    console.log('Before unshift:', this.images.length, 'images.');
+                    this.images.unshift(...result.images);
+                    console.log('After unshift:', this.images.length, 'images.');
+                    this.applyFiltersAndSort();
+                }
+                if (result.processed_count > 0) {
+                    this.showNotification(`Successfully processed ${result.processed_count} images`, 'success');
+                }
+                if (result.errors && result.errors.length > 0) {
+                    let errorMsg = `Failed to process ${result.errors.length} images.`;
+                    console.error('Server-side processing errors:', result.errors);
+                    this.showNotification(errorMsg, 'error');
+                }
             } else {
+                console.error('Upload API call was not successful:', result);
                 this.showNotification('Error uploading files', 'error');
             }
         } catch (error) {
@@ -288,16 +305,16 @@ class PhotoCullingApp {
     renderImages() {
         const container = document.getElementById('image-grid');
         const welcomeMessage = document.getElementById('welcome-message');
-        
-        if (this.filteredImages.length === 0) {
+
+        if (this.filteredImages.length === 0 && this.images.length === 0) {
+            container.style.display = 'none';
             welcomeMessage.style.display = 'block';
-            container.innerHTML = '';
-            container.appendChild(welcomeMessage);
-            return;
+        } else {
+            container.style.display = 'grid';
+            welcomeMessage.style.display = 'none';
         }
-        
-        welcomeMessage.style.display = 'none';
-        container.innerHTML = '';
+
+        container.innerHTML = ''; // Clear previous images
         
         this.filteredImages.forEach(image => {
             const card = this.createImageCard(image);
@@ -307,12 +324,11 @@ class PhotoCullingApp {
     
     createImageCard(image) {
         const card = document.createElement('div');
-        card.className = `image-card ${image.label}`;
+        card.className = `image-card ${image.label || 'none'}`;
         card.setAttribute('data-image-id', image.id);
         card.style.cursor = 'pointer';
         
-        // Create placeholder thumbnail (since we don't have actual images in demo)
-        const thumbnailSrc = image.thumbnail_path ? `/thumbnails/${image.thumbnail_path.split('/').pop()}` : this.generatePlaceholderImage(image);
+        const thumbnailSrc = image.thumbnail_path ? `/thumbnails/${image.thumbnail_path}` : this.generatePlaceholderImage(image);
         
         card.innerHTML = `
             <img src="${thumbnailSrc}" alt="${image.filename}" class="image-thumbnail" style="height: ${this.thumbnailSize}px;">
@@ -334,10 +350,10 @@ class PhotoCullingApp {
                         ${this.generateStars(image.rating || 0)}
                     </div>
                     <div class="control-buttons">
-                        <button class="control-btn select-btn" onclick="app.quickSelect(${image.id})">
+                        <button class="control-btn select-btn" onclick="app.quickSelect(event, ${image.id})">
                             <i class="fas fa-check"></i>
                         </button>
-                        <button class="control-btn reject-btn" onclick="app.quickReject(${image.id})">
+                        <button class="control-btn reject-btn" onclick="app.quickReject(event, ${image.id})">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -399,33 +415,31 @@ class PhotoCullingApp {
     
     showImageModal(image) {
         this.currentImageId = image.id;
-        const modal = new bootstrap.Modal(document.getElementById('imageModal'));
+        const modalElement = document.getElementById('imageModal');
+        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
         
         // Populate modal
         document.getElementById('modal-filename').textContent = image.filename;
-        document.getElementById('modal-image').src = this.generatePlaceholderImage(image);
+        document.getElementById('modal-image').src = image.filename ? `/images/${image.filename}` : this.generatePlaceholderImage(image);
         
-        // Update rating buttons
-        document.querySelectorAll('.rating-btn').forEach(btn => {
-            btn.classList.toggle('btn-warning', parseInt(btn.getAttribute('data-rating')) === (image.rating || 0));
-            btn.classList.toggle('btn-outline-warning', parseInt(btn.getAttribute('data-rating')) !== (image.rating || 0));
-        });
-        
-        // Update label buttons
-        document.querySelectorAll('.label-btn').forEach(btn => {
-            const isActive = btn.getAttribute('data-label') === image.label;
-            btn.classList.toggle('btn-success', isActive && btn.getAttribute('data-label') === 'selected');
-            btn.classList.toggle('btn-danger', isActive && btn.getAttribute('data-label') === 'rejected');
-            btn.classList.toggle('btn-info', isActive && btn.getAttribute('data-label') === 'review');
-            btn.classList.toggle('btn-outline-success', !isActive && btn.getAttribute('data-label') === 'selected');
-            btn.classList.toggle('btn-outline-danger', !isActive && btn.getAttribute('data-label') === 'rejected');
-            btn.classList.toggle('btn-outline-info', !isActive && btn.getAttribute('data-label') === 'review');
-        });
+        this.updateModalUI(image);
         
         // Populate analysis results
         this.populateAnalysisResults(image);
         
         modal.show();
+    }
+
+    updateModalUI(image) {
+        // Update rating buttons
+        document.querySelectorAll('.rating-btn').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.getAttribute('data-rating')) === (image.rating || 0));
+        });
+        
+        // Update label buttons
+        document.querySelectorAll('.label-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-label') === (image.label || 'none'));
+        });
     }
     
     populateAnalysisResults(image) {
@@ -467,7 +481,7 @@ class PhotoCullingApp {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ rating })
+                body: JSON.stringify({ rating, label: this.images.find(img => img.id === imageId).label })
             });
             
             if (response.ok) {
@@ -476,6 +490,9 @@ class PhotoCullingApp {
                 if (image) {
                     image.rating = rating;
                     this.applyFiltersAndSort();
+                    if (this.currentImageId === imageId) {
+                        this.updateModalUI(image);
+                    }
                 }
             }
         } catch (error) {
@@ -490,7 +507,7 @@ class PhotoCullingApp {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ rating: 0, label })
+                body: JSON.stringify({ rating: this.images.find(img => img.id === imageId).rating, label })
             });
             
             if (response.ok) {
@@ -499,6 +516,9 @@ class PhotoCullingApp {
                 if (image) {
                     image.label = label;
                     this.applyFiltersAndSort();
+                    if (this.currentImageId === imageId) {
+                        this.updateModalUI(image);
+                    }
                 }
             }
         } catch (error) {
@@ -506,12 +526,12 @@ class PhotoCullingApp {
         }
     }
     
-    quickSelect(imageId) {
+    quickSelect(event, imageId) {
         event.stopPropagation();
         this.updateImageLabel(imageId, 'selected');
     }
     
-    quickReject(imageId) {
+    quickReject(event, imageId) {
         event.stopPropagation();
         this.updateImageLabel(imageId, 'rejected');
     }
