@@ -131,6 +131,29 @@ class PhotoCullingApp {
             const files = Array.from(e.dataTransfer.files);
             this.uploadFiles(files);
         });
+
+        // Add drag and drop for compare view
+        const compareLeft = document.getElementById('compare-left');
+        const compareRight = document.getElementById('compare-right');
+
+        [compareLeft, compareRight].forEach(el => {
+            el.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                el.classList.add('drag-over');
+            });
+
+            el.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                el.classList.remove('drag-over');
+            });
+
+            el.addEventListener('drop', (e) => {
+                e.preventDefault();
+                el.classList.remove('drag-over');
+                const imageId = e.dataTransfer.getData('text/plain');
+                this.renderCompareImage(parseInt(imageId), el.id);
+            });
+        });
     }
     
     async handleFileUpload(event) {
@@ -326,6 +349,7 @@ class PhotoCullingApp {
         const card = document.createElement('div');
         card.className = `image-card ${image.label || 'none'}`;
         card.setAttribute('data-image-id', image.id);
+        card.setAttribute('draggable', 'true');
         card.style.cursor = 'pointer';
         
         const thumbnailSrc = image.thumbnail_path ? `/thumbnails/${image.thumbnail_path}` : this.generatePlaceholderImage(image);
@@ -361,6 +385,10 @@ class PhotoCullingApp {
             </div>
         `;
         
+        card.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', image.id);
+        });
+
         card.addEventListener('click', (e) => {
             if (!e.target.closest('.control-btn')) {
                 this.showImageModal(image);
@@ -579,6 +607,36 @@ class PhotoCullingApp {
         grid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${minWidth}px, 1fr))`;
     }
     
+    renderCompareImage(imageId, panelId) {
+        const image = this.images.find(img => img.id === imageId);
+        if (!image) return;
+
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+
+        const imageSrc = image.filename ? `/images/${image.filename}` : this.generatePlaceholderImage(image);
+
+        panel.innerHTML = `
+            <div class="compare-image-container">
+                <img src="${imageSrc}" alt="${image.filename}" class="img-fluid">
+                <div class="compare-image-details p-2">
+                    <h6>${image.filename}</h6>
+                    <div class="analysis-metric">
+                        <span>Focus:</span>
+                        <span class="metric-value ${this.getQualityClass(image.focus_score)}">${Math.round(image.focus_score || 0)}</span>
+                    </div>
+                    <div class="analysis-metric">
+                        <span>Exposure:</span>
+                        <span class="metric-value ${this.getQualityClass(image.exposure_score)}">${Math.round(image.exposure_score || 0)}</span>
+                    </div>
+                    <div class="analysis-metric">
+                        <span>Quality:</span>
+                        <span class="metric-value ${this.getQualityClass(image.quality_score)}">${Math.round(image.quality_score || 0)}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
     updateStats() {
         const totalCount = this.images.length;
         const selectedCount = this.images.filter(img => img.label === 'selected').length;
