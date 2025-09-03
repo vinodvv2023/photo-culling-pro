@@ -4,26 +4,26 @@ class PhotoCullingApp {
         this.images = [];
         this.filteredImages = [];
         this.currentImageId = null;
-        this.compareImages = [];
+        this.compareImages = [null, null];
         this.currentView = 'grid';
         this.thumbnailSize = 250;
         this.processing = false;
-        
+
         this.filters = {
             rating: 'all',
             label: 'all',
             focusThreshold: 0,
             exposureThreshold: 0
         };
-        
+
         this.sortBy = 'filename';
         this.selectedImages = new Set();
-        
+
         this.initializeEventListeners();
         this.loadImages();
         this.showShortcuts();
     }
-    
+
     initializeEventListeners() {
         // File upload
         document.getElementById('file-input').addEventListener('change', (e) => this.handleFileUpload(e));
@@ -31,63 +31,63 @@ class PhotoCullingApp {
             document.getElementById('file-input').click();
         });
         document.getElementById('load-sample').addEventListener('click', () => this.loadSampleImages());
-        
-        // Drag and drop
-        this.setupDragAndDrop();
-        
+
+        // Drag and drop for upload
+        this.setupUploadDragAndDrop();
+
         // Filters and sorting
         document.getElementById('sort-select').addEventListener('change', (e) => {
             this.sortBy = e.target.value;
             this.applyFiltersAndSort();
         });
-        
+
         document.getElementById('rating-filter').addEventListener('change', (e) => {
             this.filters.rating = e.target.value;
             this.applyFiltersAndSort();
         });
-        
+
         document.getElementById('label-filter').addEventListener('change', (e) => {
             this.filters.label = e.target.value;
             this.applyFiltersAndSort();
         });
-        
+
         // Thresholds
         document.getElementById('focus-threshold').addEventListener('input', (e) => {
             this.filters.focusThreshold = parseInt(e.target.value);
             document.getElementById('focus-threshold-value').textContent = e.target.value;
             this.applyFiltersAndSort();
         });
-        
+
         document.getElementById('exposure-threshold').addEventListener('input', (e) => {
             this.filters.exposureThreshold = parseInt(e.target.value);
             document.getElementById('exposure-threshold-value').textContent = e.target.value;
             this.applyFiltersAndSort();
         });
-        
+
         // View controls
         document.getElementById('grid-view').addEventListener('click', () => this.setView('grid'));
         document.getElementById('compare-view').addEventListener('click', () => this.setView('compare'));
-        
+
         document.getElementById('thumbnail-size').addEventListener('input', (e) => {
             this.thumbnailSize = parseInt(e.target.value);
             this.updateThumbnailSize();
         });
-        
+
         // Batch actions
         document.getElementById('select-all').addEventListener('click', () => this.batchAction('select'));
         document.getElementById('reject-all').addEventListener('click', () => this.batchAction('reject'));
         document.getElementById('clear-all').addEventListener('click', () => this.batchAction('clear'));
-        
+
         // Export
         document.getElementById('export-btn').addEventListener('click', () => this.showExportModal());
         document.getElementById('confirm-export').addEventListener('click', () => this.exportImages());
-        
+
         // Theme toggle
         document.getElementById('theme-toggle').addEventListener('click', () => this.toggleTheme());
-        
+
         // Modal controls
         document.addEventListener('keydown', (e) => this.handleKeyboard(e));
-        
+
         // Rating buttons in modal
         document.querySelectorAll('.rating-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -95,7 +95,7 @@ class PhotoCullingApp {
                 this.updateImageRating(this.currentImageId, rating);
             });
         });
-        
+
         // Label buttons in modal
         document.querySelectorAll('.label-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -103,75 +103,56 @@ class PhotoCullingApp {
                 this.updateImageLabel(this.currentImageId, label);
             });
         });
+
+        // Compare View Controls
+        document.getElementById('clear-compare-btn').addEventListener('click', () => this.clearCompareView());
+        document.getElementById('film-strip-search').addEventListener('input', (e) => this.filterFilmStrip(e.target.value));
     }
-    
-    setupDragAndDrop() {
+
+    setupUploadDragAndDrop() {
         const uploadArea = document.getElementById('upload-area');
-        
+
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             uploadArea.addEventListener(eventName, (e) => {
                 e.preventDefault();
                 e.stopPropagation();
             });
         });
-        
+
         ['dragenter', 'dragover'].forEach(eventName => {
             uploadArea.addEventListener(eventName, () => {
                 uploadArea.classList.add('drag-over');
             });
         });
-        
+
         ['dragleave', 'drop'].forEach(eventName => {
             uploadArea.addEventListener(eventName, () => {
                 uploadArea.classList.remove('drag-over');
             });
         });
-        
+
         uploadArea.addEventListener('drop', (e) => {
             const files = Array.from(e.dataTransfer.files);
             this.uploadFiles(files);
         });
-
-        // Add drag and drop for compare view
-        const compareLeft = document.getElementById('compare-left');
-        const compareRight = document.getElementById('compare-right');
-
-        [compareLeft, compareRight].forEach(el => {
-            el.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                el.classList.add('drag-over');
-            });
-
-            el.addEventListener('dragleave', (e) => {
-                e.preventDefault();
-                el.classList.remove('drag-over');
-            });
-
-            el.addEventListener('drop', (e) => {
-                e.preventDefault();
-                el.classList.remove('drag-over');
-                const imageId = e.dataTransfer.getData('text/plain');
-                this.renderCompareImage(parseInt(imageId), el.id);
-            });
-        });
     }
-    
+
     async handleFileUpload(event) {
         const files = Array.from(event.target.files);
         await this.uploadFiles(files);
     }
-    
+
     async uploadFiles(files) {
         if (this.processing) return;
-        
+
         this.processing = true;
         this.showProcessingStatus(true);
-        
+
         const formData = new FormData();
         files.forEach(file => {
             formData.append('files', file);
         });
-        
+
         console.log('Starting upload for', files.length, 'files.');
 
         try {
@@ -179,11 +160,11 @@ class PhotoCullingApp {
                 method: 'POST',
                 body: formData
             });
-            
+
             console.log('Received response from /api/upload');
             const result = await response.json();
             console.log('Parsed JSON response:', result);
-            
+
             if (result.success) {
                 if (result.images && result.images.length > 0) {
                     console.log('Before unshift:', this.images.length, 'images.');
@@ -211,7 +192,7 @@ class PhotoCullingApp {
             this.showProcessingStatus(false);
         }
     }
-    
+
     async loadImages() {
         try {
             const response = await fetch('/api/images');
@@ -221,13 +202,14 @@ class PhotoCullingApp {
             console.error('Error loading images:', error);
         }
     }
-    
+
     loadSampleImages() {
         // Create sample images for demonstration
         const sampleImages = [
             {
                 id: 1,
                 filename: 'sample_portrait_1.jpg',
+                thumbnail_path: 'sample_portrait_1.jpg',
                 focus_score: 85,
                 exposure_score: 92,
                 quality_score: 88,
@@ -245,6 +227,7 @@ class PhotoCullingApp {
             {
                 id: 2,
                 filename: 'sample_landscape_1.jpg',
+                thumbnail_path: 'sample_landscape_1.jpg',
                 focus_score: 45,
                 exposure_score: 78,
                 quality_score: 62,
@@ -262,6 +245,7 @@ class PhotoCullingApp {
             {
                 id: 3,
                 filename: 'sample_portrait_2.jpg',
+                thumbnail_path: 'sample_portrait_2.jpg',
                 focus_score: 92,
                 exposure_score: 88,
                 quality_score: 90,
@@ -277,33 +261,33 @@ class PhotoCullingApp {
                 }
             }
         ];
-        
+
         this.images = sampleImages;
         this.applyFiltersAndSort();
         this.showNotification('Sample images loaded for demonstration', 'info');
     }
-    
+
     applyFiltersAndSort() {
         let filtered = [...this.images];
-        
+
         // Apply rating filter
         if (this.filters.rating !== 'all') {
             const rating = parseInt(this.filters.rating);
             filtered = filtered.filter(img => img.rating === rating);
         }
-        
+
         // Apply label filter
         if (this.filters.label !== 'all') {
             filtered = filtered.filter(img => img.label === this.filters.label);
         }
-        
+
         // Apply quality thresholds
         filtered = filtered.filter(img => {
             const focusOk = (img.focus_score || 0) >= this.filters.focusThreshold;
             const exposureOk = (img.exposure_score || 0) >= this.filters.exposureThreshold;
             return focusOk && exposureOk;
         });
-        
+
         // Sort images
         filtered.sort((a, b) => {
             switch (this.sortBy) {
@@ -319,12 +303,12 @@ class PhotoCullingApp {
                     return (a.filename || '').localeCompare(b.filename || '');
             }
         });
-        
+
         this.filteredImages = filtered;
         this.renderImages();
         this.updateStats();
     }
-    
+
     renderImages() {
         const container = document.getElementById('image-grid');
         const welcomeMessage = document.getElementById('welcome-message');
@@ -338,22 +322,21 @@ class PhotoCullingApp {
         }
 
         container.innerHTML = ''; // Clear previous images
-        
+
         this.filteredImages.forEach(image => {
             const card = this.createImageCard(image);
             container.appendChild(card);
         });
     }
-    
+
     createImageCard(image) {
         const card = document.createElement('div');
         card.className = `image-card ${image.label || 'none'}`;
         card.setAttribute('data-image-id', image.id);
-        card.setAttribute('draggable', 'true');
         card.style.cursor = 'pointer';
-        
+
         const thumbnailSrc = image.thumbnail_path ? `/thumbnails/${image.thumbnail_path}` : this.generatePlaceholderImage(image);
-        
+
         card.innerHTML = `
             <img src="${thumbnailSrc}" alt="${image.filename}" class="image-thumbnail" style="height: ${this.thumbnailSize}px;">
             <div class="image-overlay">
@@ -384,55 +367,49 @@ class PhotoCullingApp {
                 </div>
             </div>
         `;
-        
-        card.addEventListener('dragstart', (e) => {
-            e.dataTransfer.setData('text/plain', image.id);
-        });
 
         card.addEventListener('click', (e) => {
             if (!e.target.closest('.control-btn')) {
                 this.showImageModal(image);
             }
         });
-        
+
         return card;
     }
-    
+
     generatePlaceholderImage(image) {
         // Generate a colored placeholder based on image properties
         const canvas = document.createElement('canvas');
         canvas.width = 300;
         canvas.height = 200;
         const ctx = canvas.getContext('2d');
-        
-        // Choose color based on quality
+
         const quality = image.quality_score || 0;
         let color;
         if (quality > 80) color = '#198754'; // green
         else if (quality > 60) color = '#ffc107'; // yellow
         else color = '#dc3545'; // red
-        
+
         ctx.fillStyle = color;
         ctx.fillRect(0, 0, 300, 200);
-        
-        // Add text
+
         ctx.fillStyle = 'white';
         ctx.font = '16px Arial';
         ctx.textAlign = 'center';
         ctx.fillText(image.filename, 150, 90);
         ctx.fillText(`Quality: ${Math.round(quality)}`, 150, 110);
         ctx.fillText(`Focus: ${Math.round(image.focus_score || 0)}`, 150, 130);
-        
+
         return canvas.toDataURL();
     }
-    
+
     getQualityClass(score) {
         if (!score) return 'quality-poor';
         if (score > 80) return 'quality-good';
         if (score > 60) return 'quality-medium';
         return 'quality-poor';
     }
-    
+
     generateStars(rating) {
         let stars = '';
         for (let i = 1; i <= 5; i++) {
@@ -440,40 +417,35 @@ class PhotoCullingApp {
         }
         return stars;
     }
-    
+
     showImageModal(image) {
         this.currentImageId = image.id;
         const modalElement = document.getElementById('imageModal');
         const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
-        
-        // Populate modal
+
         document.getElementById('modal-filename').textContent = image.filename;
         document.getElementById('modal-image').src = image.filename ? `/images/${image.filename}` : this.generatePlaceholderImage(image);
-        
+
         this.updateModalUI(image);
-        
-        // Populate analysis results
         this.populateAnalysisResults(image);
-        
+
         modal.show();
     }
 
     updateModalUI(image) {
-        // Update rating buttons
         document.querySelectorAll('.rating-btn').forEach(btn => {
             btn.classList.toggle('active', parseInt(btn.getAttribute('data-rating')) === (image.rating || 0));
         });
-        
-        // Update label buttons
+
         document.querySelectorAll('.label-btn').forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-label') === (image.label || 'none'));
         });
     }
-    
+
     populateAnalysisResults(image) {
         const container = document.getElementById('analysis-results');
         const analysis = image.analysis_data || {};
-        
+
         container.innerHTML = `
             <div class="analysis-metric">
                 <span>Focus Score:</span>
@@ -501,19 +473,16 @@ class PhotoCullingApp {
             </div>
         `;
     }
-    
+
     async updateImageRating(imageId, rating) {
         try {
             const response = await fetch(`/api/images/${imageId}/rating`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ rating, label: this.images.find(img => img.id === imageId).label })
             });
-            
+
             if (response.ok) {
-                // Update local data
                 const image = this.images.find(img => img.id === imageId);
                 if (image) {
                     image.rating = rating;
@@ -527,19 +496,16 @@ class PhotoCullingApp {
             console.error('Error updating rating:', error);
         }
     }
-    
+
     async updateImageLabel(imageId, label) {
         try {
             const response = await fetch(`/api/images/${imageId}/rating`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ rating: this.images.find(img => img.id === imageId).rating, label })
             });
-            
+
             if (response.ok) {
-                // Update local data
                 const image = this.images.find(img => img.id === imageId);
                 if (image) {
                     image.label = label;
@@ -553,26 +519,22 @@ class PhotoCullingApp {
             console.error('Error updating label:', error);
         }
     }
-    
+
     quickSelect(event, imageId) {
         event.stopPropagation();
         this.updateImageLabel(imageId, 'selected');
     }
-    
+
     quickReject(event, imageId) {
         event.stopPropagation();
         this.updateImageLabel(imageId, 'rejected');
     }
-    
+
     batchAction(action) {
         this.filteredImages.forEach(image => {
             switch (action) {
-                case 'select':
-                    this.updateImageLabel(image.id, 'selected');
-                    break;
-                case 'reject':
-                    this.updateImageLabel(image.id, 'rejected');
-                    break;
+                case 'select': this.updateImageLabel(image.id, 'selected'); break;
+                case 'reject': this.updateImageLabel(image.id, 'rejected'); break;
                 case 'clear':
                     this.updateImageRating(image.id, 0);
                     this.updateImageLabel(image.id, 'none');
@@ -580,33 +542,40 @@ class PhotoCullingApp {
             }
         });
     }
-    
+
     setView(view) {
         this.currentView = view;
-        
         document.querySelectorAll('[data-view]').forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-view') === view);
         });
-        
+
+        const gridView = document.getElementById('image-grid');
+        const welcomeMessage = document.getElementById('welcome-message');
+        const compareView = document.getElementById('compare-container');
+
         if (view === 'grid') {
-            document.getElementById('image-grid').style.display = 'grid';
-            document.getElementById('compare-container').style.display = 'none';
-        } else {
-            document.getElementById('image-grid').style.display = 'none';
-            document.getElementById('compare-container').style.display = 'block';
+            gridView.style.display = 'grid';
+            welcomeMessage.style.display = this.images.length === 0 ? 'block' : 'none';
+            compareView.style.display = 'none';
+        } else { // 'compare'
+            gridView.style.display = 'none';
+            welcomeMessage.style.display = 'none';
+            compareView.style.display = 'block';
+            this.clearCompareView();
+            this.renderFilmStrip();
         }
     }
-    
+
     updateThumbnailSize() {
         document.querySelectorAll('.image-thumbnail').forEach(img => {
             img.style.height = this.thumbnailSize + 'px';
         });
-        
+
         const grid = document.getElementById('image-grid');
         const minWidth = Math.max(150, this.thumbnailSize - 50);
         grid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${minWidth}px, 1fr))`;
     }
-    
+
     renderCompareImage(imageId, panelId) {
         const image = this.images.find(img => img.id === imageId);
         if (!image) return;
@@ -637,45 +606,100 @@ class PhotoCullingApp {
             </div>
         `;
     }
+
+    renderFilmStrip(images = this.images) {
+        const filmStripGrid = document.getElementById('film-strip-grid');
+        filmStripGrid.innerHTML = '';
+
+        images.forEach(image => {
+            const img = document.createElement('img');
+            img.src = image.thumbnail_path ? `/thumbnails/${image.thumbnail_path}` : this.generatePlaceholderImage(image);
+            img.alt = image.filename;
+            img.className = 'film-strip-image';
+            img.setAttribute('data-image-id', image.id);
+
+            if (this.compareImages.includes(image.id)) {
+                img.classList.add('selected');
+            }
+
+            img.addEventListener('click', () => this.handleFilmStripClick(image.id));
+            filmStripGrid.appendChild(img);
+        });
+    }
+
+    handleFilmStripClick(imageId) {
+        // Avoid selecting the same image twice
+        if (this.compareImages.includes(imageId)) return;
+
+        const firstEmptySlot = this.compareImages.indexOf(null);
+
+        if (firstEmptySlot !== -1) {
+            this.compareImages[firstEmptySlot] = imageId;
+            const panelId = firstEmptySlot === 0 ? 'compare-left' : 'compare-right';
+            this.renderCompareImage(imageId, panelId);
+            this.renderFilmStrip(); // Re-render to show selection
+        }
+        // If no empty slots, do nothing as per user requirement.
+    }
+
+    clearCompareView() {
+        this.compareImages = [null, null];
+
+        const leftPanel = document.getElementById('compare-left');
+        const rightPanel = document.getElementById('compare-right');
+
+        leftPanel.innerHTML = `<div class="compare-placeholder"><p class="text-muted">Select first image to compare</p></div>`;
+        rightPanel.innerHTML = `<div class="compare-placeholder"><p class="text-muted">Select second image to compare</p></div>`;
+
+        document.getElementById('film-strip-search').value = '';
+        this.renderFilmStrip();
+    }
+
+    filterFilmStrip(searchTerm) {
+        const lowerCaseSearchTerm = searchTerm.toLowerCase();
+        const filtered = this.images.filter(image =>
+            image.filename.toLowerCase().includes(lowerCaseSearchTerm)
+        );
+        this.renderFilmStrip(filtered);
+    }
+
     updateStats() {
         const totalCount = this.images.length;
         const selectedCount = this.images.filter(img => img.label === 'selected').length;
         const rejectedCount = this.images.filter(img => img.label === 'rejected').length;
-        
+
         document.getElementById('total-count').textContent = totalCount;
         document.getElementById('selected-count').textContent = selectedCount;
         document.getElementById('rejected-count').textContent = rejectedCount;
     }
-    
+
     showExportModal() {
         const selectedImages = this.images.filter(img => img.label === 'selected');
         if (selectedImages.length === 0) {
             this.showNotification('No images selected for export', 'warning');
             return;
         }
-        
+
         const modal = new bootstrap.Modal(document.getElementById('exportModal'));
         modal.show();
     }
-    
+
     async exportImages() {
         const selectedImages = this.images.filter(img => img.label === 'selected');
         const exportType = document.querySelector('input[name="exportType"]:checked').value;
-        
+
         try {
             const response = await fetch('/api/export', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     type: exportType,
                     selected_ids: selectedImages.map(img => img.id)
                 })
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 this.showNotification(`Successfully exported ${result.exported_files} files`, 'success');
                 bootstrap.Modal.getInstance(document.getElementById('exportModal')).hide();
@@ -687,61 +711,45 @@ class PhotoCullingApp {
             this.showNotification('Export failed', 'error');
         }
     }
-    
+
     toggleTheme() {
         document.body.classList.toggle('dark-theme');
         const icon = document.querySelector('#theme-toggle i');
         icon.classList.toggle('fa-moon');
         icon.classList.toggle('fa-sun');
     }
-    
+
     showProcessingStatus(show) {
         const status = document.getElementById('processing-status');
         status.style.display = show ? 'block' : 'none';
     }
-    
+
     showShortcuts() {
         const shortcuts = document.getElementById('shortcuts-help');
         shortcuts.classList.add('show');
-        
+
         setTimeout(() => {
             shortcuts.classList.remove('show');
         }, 5000);
     }
-    
+
     handleKeyboard(event) {
-        // Only handle keyboard shortcuts when not in input fields
         if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
             return;
         }
-        
+
         switch (event.key) {
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-                if (this.currentImageId) {
-                    this.updateImageRating(this.currentImageId, parseInt(event.key));
-                }
+            case '1': case '2': case '3': case '4': case '5':
+                if (this.currentImageId) this.updateImageRating(this.currentImageId, parseInt(event.key));
                 break;
-            case 'g':
-            case 'G':
-                if (this.currentImageId) {
-                    this.updateImageLabel(this.currentImageId, 'selected');
-                }
+            case 'g': case 'G':
+                if (this.currentImageId) this.updateImageLabel(this.currentImageId, 'selected');
                 break;
-            case 'r':
-            case 'R':
-                if (this.currentImageId) {
-                    this.updateImageLabel(this.currentImageId, 'rejected');
-                }
+            case 'r': case 'R':
+                if (this.currentImageId) this.updateImageLabel(this.currentImageId, 'rejected');
                 break;
-            case 'y':
-            case 'Y':
-                if (this.currentImageId) {
-                    this.updateImageLabel(this.currentImageId, 'review');
-                }
+            case 'y': case 'Y':
+                if (this.currentImageId) this.updateImageLabel(this.currentImageId, 'review');
                 break;
             case 'Escape':
                 const modal = bootstrap.Modal.getInstance(document.getElementById('imageModal'));
@@ -749,9 +757,8 @@ class PhotoCullingApp {
                 break;
         }
     }
-    
+
     showNotification(message, type = 'info') {
-        // Create a simple toast notification
         const toast = document.createElement('div');
         toast.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
         toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
@@ -759,9 +766,9 @@ class PhotoCullingApp {
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
-        
+
         document.body.appendChild(toast);
-        
+
         setTimeout(() => {
             if (toast.parentNode) {
                 toast.parentNode.removeChild(toast);
