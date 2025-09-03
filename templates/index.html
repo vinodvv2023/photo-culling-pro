@@ -96,13 +96,13 @@
                         <h6>Quality Thresholds</h6>
                         <div class="mb-2">
                             <label class="form-label small">Focus Threshold:</label>
-                            <input type="range" class="form-range" id="focus-threshold" min="0" max="100" value="60">
-                            <small class="text-muted" id="focus-threshold-value">60</small>
+                            <input type="range" class="form-range" id="focus-threshold" min="0" max="100" value="0">
+                            <small class="text-muted" id="focus-threshold-value">0</small>
                         </div>
                         <div class="mb-2">
                             <label class="form-label small">Exposure Threshold:</label>
-                            <input type="range" class="form-range" id="exposure-threshold" min="0" max="100" value="70">
-                            <small class="text-muted" id="exposure-threshold-value">70</small>
+                            <input type="range" class="form-range" id="exposure-threshold" min="0" max="100" value="0">
+                            <small class="text-muted" id="exposure-threshold-value">0</small>
                         </div>
                     </div>
 
@@ -148,11 +148,12 @@
 
                     <!-- Image Grid -->
                     <div id="image-grid" class="image-grid">
-                        <div class="welcome-message text-center p-5" id="welcome-message">
-                            <i class="fas fa-images fa-4x text-muted mb-3"></i>
-                            <h4>Welcome to PhotoCull Pro</h4>
-                            <p class="text-muted">Upload photos to begin professional culling with AI-powered analysis</p>
-                        </div>
+                        <!-- Image cards will be rendered here -->
+                    </div>
+                    <div class="welcome-message text-center p-5" id="welcome-message">
+                        <i class="fas fa-images fa-4x text-muted mb-3"></i>
+                        <h4>Welcome to PhotoCull Pro</h4>
+                        <p class="text-muted">Upload photos to begin professional culling with AI-powered analysis</p>
                     </div>
 
                     <!-- Compare View -->
