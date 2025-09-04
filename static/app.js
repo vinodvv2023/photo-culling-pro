@@ -86,6 +86,7 @@ class PhotoCullingApp {
         document.getElementById('theme-toggle').addEventListener('click', () => this.toggleTheme());
 
         // Modal controls
+
         const imageModal = document.getElementById('imageModal');
         imageModal.addEventListener('show.bs.modal', () => {
             document.addEventListener('keydown', this.handleKeyboard.bind(this));
@@ -93,6 +94,7 @@ class PhotoCullingApp {
         imageModal.addEventListener('hide.bs.modal', () => {
             document.removeEventListener('keydown', this.handleKeyboard.bind(this));
         });
+
 
         // Rating buttons in modal
         document.querySelectorAll('.rating-btn').forEach(btn => {
